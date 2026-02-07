@@ -11,14 +11,25 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from openai import AsyncOpenAI
 
 import certifi
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 app = FastAPI(title="RCA Reviewer API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-client = AsyncIOMotorClient(os.environ.get("MONGO_URL"), tlsCAFile=certifi.where())
-db = client[os.environ.get("DB_NAME")]
+mongo_url = os.environ.get("MONGO_URL", "")
+try:
+    client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=5000)
+    db = client[os.environ.get("DB_NAME", "rca_reviewer")]
+    db_available = True
+except Exception:
+    db_available = False
+    db = None
+
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 ISSUE_TYPES = [
