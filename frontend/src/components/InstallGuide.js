@@ -10,6 +10,7 @@ function onOpen(e) {
   DocumentApp.getUi()
     .createAddonMenu()
     .addItem('Open RCA Reviewer', 'showSidebar')
+    .addItem('Test Comment', 'testComment')
     .addToUi();
 }
 
