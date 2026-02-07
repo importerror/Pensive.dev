@@ -53,9 +53,6 @@ function runReview() {
   // Insert inline comments in document
   insertComments(doc, body, analysis.comments, existingIssues);
   
-  // Create/update RCA Summary tab
-  generateReviewTab(doc, analysis);
-  
   // Store issue tracking
   props.setProperty('rca_issues', JSON.stringify(analysis.comments));
   props.setProperty('last_analysis', JSON.stringify(analysis));
