@@ -217,75 +217,69 @@ function generateReviewTab(doc, analysis) {
 }`,
 
   'CommentService.gs': `/**
- * Comment management for inline feedback
+ * Comment management using Drive API v3 for real Google Docs comments
  */
 
 function insertComments(doc, rcaBody, comments, existingIssues) {
-  var existingMap = {};
-  for (var i = 0; i < existingIssues.length; i++) {
-    existingMap[existingIssues[i].issue_id] = existingIssues[i];
-  }
+  var docId = doc.getId();
+  var props = PropertiesService.getDocumentProperties();
+  var commentMap = JSON.parse(props.getProperty('comment_map') || '{}');
   
   for (var i = 0; i < comments.length; i++) {
     var comment = comments[i];
     
-    if (comment.resolved) {
-      // If issue is resolved, optionally mark it
-      continue;
-    }
+    if (comment.resolved) continue;
     
     var anchorText = comment.anchor_text;
     if (!anchorText) continue;
     
-    // Find the text in the document
-    var searchResult = rcaBody.findText(escapeRegex(anchorText));
-    
-    if (searchResult) {
-      var element = searchResult.getElement();
-      var start = searchResult.getStartOffset();
-      var end = searchResult.getEndOffsetInclusive();
-      
-      // Highlight the text
-      if (element.editAsText) {
-        element.editAsText().setBackgroundColor(start, end, '#fce8b2');
+    // Skip if we already created a comment for this issue
+    if (commentMap[comment.issue_id] && commentMap[comment.issue_id].drive_comment_id) {
+      // Update existing comment by adding a reply
+      try {
+        var existingCommentId = commentMap[comment.issue_id].drive_comment_id;
+        Drive.Replies.create(
+          { content: comment.comment_body, action: 'reopen' },
+          docId,
+          existingCommentId,
+          { fields: 'id' }
+        );
+      } catch (e) {
+        Logger.log('Could not update comment, creating new: ' + e.toString());
+        createNewComment(docId, comment, commentMap);
       }
-      
-      // Note: Google Docs API for comments requires Drive API
-      // In Apps Script, we use document-level comments via Drive
-      addDocumentComment(doc, comment);
+      continue;
     }
+    
+    createNewComment(docId, comment, commentMap);
   }
+  
+  props.setProperty('comment_map', JSON.stringify(commentMap));
 }
 
-function addDocumentComment(doc, comment) {
+function createNewComment(docId, comment, commentMap) {
   try {
-    var docId = doc.getId();
-    
-    // Use Drive API to add comments
-    // This requires the Drive API to be enabled
     var resource = {
       content: comment.comment_body,
-      anchor: comment.anchor_text
+      quotedFileContent: {
+        mimeType: 'text/plain',
+        value: comment.anchor_text
+      }
     };
     
-    // Store comment mapping for tracking
-    var props = PropertiesService.getDocumentProperties();
-    var commentMap = JSON.parse(props.getProperty('comment_map') || '{}');
+    var result = Drive.Comments.create(resource, docId, { fields: 'id,content,quotedFileContent' });
+    
     commentMap[comment.issue_id] = {
+      drive_comment_id: result.id,
       issue_type: comment.issue_type,
       anchor_text: comment.anchor_text,
-      comment_body: comment.comment_body,
       timestamp: new Date().toISOString()
     };
-    props.setProperty('comment_map', JSON.stringify(commentMap));
     
+    Logger.log('Created comment: ' + result.id + ' for issue: ' + comment.issue_id);
   } catch (e) {
-    Logger.log('Error adding comment: ' + e.toString());
+    Logger.log('Error creating comment: ' + e.toString());
   }
-}
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
 }`,
 
   'ApiService.gs': `/**
