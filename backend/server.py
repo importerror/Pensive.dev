@@ -149,7 +149,7 @@ Respond with this exact JSON structure:
     {{
       "issue_id": "unique-id-string",
       "issue_type": "one of the 7 issue types",
-      "anchor_text": "exact text from the RCA to anchor the comment to",
+      "anchor_text": "CRITICAL: copy-paste 5-15 words EXACTLY as they appear in the RCA text, character for character. Do not paraphrase or summarize. This must be a verbatim substring.",
       "comment_body": "[Issue Type]\\nExplanation...\\nRecommendation: ...",
       "resolved": false
     }}
