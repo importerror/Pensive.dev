@@ -309,6 +309,167 @@ function callBackendAPI(endpoint, payload) {
   }
 }`,
 
+  'Sidebar.html': `<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif; color: #202124; font-size: 13px; line-height: 1.5; }
+    .sidebar-container { padding: 16px; display: flex; flex-direction: column; min-height: 100vh; }
+    .header { margin-bottom: 16px; }
+    .header h1 { font-size: 16px; font-weight: 500; color: #202124; }
+    .header p { font-size: 12px; color: #5f6368; margin-top: 2px; }
+    .tabs { display: flex; border-bottom: 1px solid #dadce0; margin-bottom: 16px; }
+    .tab { flex: 1; text-align: center; padding: 8px; font-size: 13px; font-weight: 500; color: #5f6368; cursor: pointer; border-bottom: 2px solid transparent; background: none; border-top: none; border-left: none; border-right: none; }
+    .tab:hover { color: #202124; }
+    .tab.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .idle-state { text-align: center; padding: 32px 16px; }
+    .idle-icon { width: 56px; height: 56px; border-radius: 50%; background: #e8f0fe; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; }
+    .idle-state h2 { font-size: 16px; font-weight: 500; margin-bottom: 8px; }
+    .idle-state p { color: #5f6368; margin-bottom: 20px; line-height: 1.5; }
+    .btn-primary { font-family: 'Google Sans', 'Roboto', sans-serif; font-size: 14px; font-weight: 500; padding: 10px 24px; border-radius: 24px; border: none; cursor: pointer; background: #1a73e8; color: white; display: inline-flex; align-items: center; gap: 8px; }
+    .btn-primary:hover { background: #1557b0; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-secondary { font-family: 'Google Sans', 'Roboto', sans-serif; font-size: 14px; font-weight: 500; padding: 10px 24px; border-radius: 24px; border: 1px solid #dadce0; cursor: pointer; background: white; color: #1a73e8; display: inline-flex; align-items: center; gap: 8px; width: 100%; justify-content: center; }
+    .btn-secondary:hover { background: #e8f0fe; }
+    .btn-text { font-size: 13px; font-weight: 500; color: #1a73e8; background: none; border: none; cursor: pointer; padding: 6px 12px; }
+    .btn-text:hover { background: #e8f0fe; border-radius: 4px; }
+    .progress-container { padding: 16px 0; }
+    .progress-header { text-align: center; margin-bottom: 20px; }
+    .spinner { width: 28px; height: 28px; border: 3px solid #e8eaed; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-steps { display: flex; flex-direction: column; gap: 12px; }
+    .step { display: flex; align-items: center; gap: 10px; color: #9aa0a6; font-size: 13px; }
+    .step.active { color: #202124; font-weight: 500; }
+    .step.done { color: #188038; }
+    .step-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #dadce0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .step.active .step-dot { border-color: #1a73e8; background: #1a73e8; }
+    .step.done .step-dot { border-color: #188038; background: #188038; }
+    .score-card { text-align: center; padding: 16px; background: #f8f9fa; border-radius: 12px; margin-bottom: 16px; }
+    .score-number { font-size: 42px; font-weight: 500; line-height: 1; }
+    .score-max { font-size: 18px; color: #5f6368; }
+    .score-label { font-size: 11px; color: #5f6368; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .score-low { color: #d93025; }
+    .score-mid { color: #f9ab00; }
+    .score-high { color: #188038; }
+    .score-interpretation { font-size: 13px; color: #5f6368; margin-top: 8px; line-height: 1.4; }
+    .improvement-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .improvement-item { font-size: 12px; padding: 8px 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #1a73e8; color: #5f6368; }
+    .actions { display: flex; flex-direction: column; gap: 8px; }
+    .chat-area { display: flex; flex-direction: column; flex: 1; }
+    .chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 0; max-height: 400px; }
+    .msg { display: flex; flex-direction: column; gap: 2px; }
+    .msg-role { font-size: 10px; font-weight: 500; color: #5f6368; text-transform: uppercase; }
+    .msg-content { font-size: 13px; padding: 8px 12px; border-radius: 12px; line-height: 1.5; }
+    .msg.user .msg-content { background: #1a73e8; color: white; border-bottom-right-radius: 4px; align-self: flex-end; }
+    .msg.assistant .msg-content { background: #f1f3f4; border-bottom-left-radius: 4px; }
+    .chat-input-row { display: flex; gap: 6px; padding-top: 10px; border-top: 1px solid #dadce0; margin-top: 10px; }
+    .chat-input { flex: 1; font-size: 13px; padding: 8px 12px; border: 1px solid #dadce0; border-radius: 20px; outline: none; }
+    .chat-input:focus { border-color: #1a73e8; }
+    .send-btn { width: 32px; height: 32px; border-radius: 50%; border: none; background: #1a73e8; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .suggestions { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+    .suggestion { font-size: 12px; color: #1a73e8; background: none; border: none; text-align: left; cursor: pointer; padding: 4px 8px; }
+    .suggestion:hover { background: #e8f0fe; border-radius: 4px; }
+    .info-link { font-size: 13px; color: #1a73e8; cursor: pointer; margin-top: 12px; display: inline-block; }
+    .error { color: #d93025; font-size: 13px; padding: 8px; background: #fce8e6; border-radius: 6px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="sidebar-container">
+    <div class="header"><h1>RCA Reviewer</h1><p>Google Docs Add-on</p></div>
+    <div class="tabs" id="tabs" style="display: none;">
+      <button class="tab active" onclick="switchTab('review')">Review</button>
+      <button class="tab" onclick="switchTab('chat')">Global Chat</button>
+    </div>
+    <div id="state-idle">
+      <div class="idle-state">
+        <div class="idle-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+        </div>
+        <h2>RCA Reviewer</h2>
+        <p>Analyze your Root Cause Analysis with Amazon-style review criteria.</p>
+        <button class="btn-primary" onclick="startReview()">Run RCA Review</button>
+        <br><span class="info-link" onclick="toggleHow()">How this works</span>
+        <div id="how-content" style="display:none;margin-top:12px;text-align:left;line-height:1.7;">
+          <p>1. Write your RCA in the "RCA" tab</p>
+          <p>2. Click "Run RCA Review"</p>
+          <p>3. AI analyzes using 6 dimensions</p>
+          <p>4. Comments appear in RCA tab</p>
+          <p>5. Executive summary in RCA Review tab</p>
+        </div>
+      </div>
+    </div>
+    <div id="state-progress" style="display:none;">
+      <div class="progress-container">
+        <div class="progress-header"><div class="spinner"></div><p style="font-weight:500;">Review in progress...</p></div>
+        <div class="progress-steps">
+          <div class="step" id="step-0"><div class="step-dot"></div><span>Analyzing incident summary</span></div>
+          <div class="step" id="step-1"><div class="step-dot"></div><span>Reviewing timeline and causality</span></div>
+          <div class="step" id="step-2"><div class="step-dot"></div><span>Evaluating action items</span></div>
+          <div class="step" id="step-3"><div class="step-dot"></div><span>Generating executive summary</span></div>
+        </div>
+      </div>
+    </div>
+    <div id="state-results" style="display:none;">
+      <div id="tab-review" class="tab-content active">
+        <div class="score-card">
+          <div class="score-number" id="score-value">0<span class="score-max"> / 30</span></div>
+          <div class="score-label">RCA Quality Score</div>
+          <div class="score-interpretation" id="score-interpretation"></div>
+        </div>
+        <h4 style="font-size:13px;font-weight:500;margin-bottom:8px;">Top Improvements</h4>
+        <ul class="improvement-list" id="improvements"></ul>
+        <div class="actions">
+          <button class="btn-secondary" onclick="switchTab('chat')">Open Global RCA Chat</button>
+          <button class="btn-text" onclick="startReview()" style="width:100%;text-align:center;">Re-run Review</button>
+        </div>
+      </div>
+      <div id="tab-chat" class="tab-content">
+        <div class="chat-area">
+          <div class="chat-messages" id="chat-messages">
+            <div style="text-align:center;color:#5f6368;padding:16px 0;">
+              <p>Ask about your RCA:</p>
+              <div class="suggestions">
+                <button class="suggestion" onclick="prefillChat('Summarize this RCA for leadership')">Summarize this RCA for leadership</button>
+                <button class="suggestion" onclick="prefillChat('What systemic issues do you see?')">What systemic issues do you see?</button>
+                <button class="suggestion" onclick="prefillChat('Are action items preventive?')">Are action items preventive?</button>
+              </div>
+            </div>
+          </div>
+          <div class="chat-input-row">
+            <input class="chat-input" id="chat-input" placeholder="Ask about this RCA..." onkeydown="if(event.key==='Enter')sendChat()">
+            <button class="send-btn" onclick="sendChat()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="error-msg" class="error" style="display:none;"></div>
+  </div>
+  <script>
+    var currentState='idle',analysisData=null;
+    function setState(s){currentState=s;document.getElementById('state-idle').style.display=s==='idle'?'block':'none';document.getElementById('state-progress').style.display=s==='progress'?'block':'none';document.getElementById('state-results').style.display=s==='results'?'block':'none';document.getElementById('tabs').style.display=s==='results'?'flex':'none';}
+    function switchTab(t){document.querySelectorAll('.tab').forEach(function(e){e.classList.remove('active');});document.querySelectorAll('.tab-content').forEach(function(e){e.classList.remove('active');});if(t==='review'){document.querySelectorAll('.tab')[0].classList.add('active');document.getElementById('tab-review').classList.add('active');}else{document.querySelectorAll('.tab')[1].classList.add('active');document.getElementById('tab-chat').classList.add('active');}}
+    function toggleHow(){var e=document.getElementById('how-content');e.style.display=e.style.display==='none'?'block':'none';}
+    function setStep(n){for(var i=0;i<4;i++){var e=document.getElementById('step-'+i);e.className='step'+(i<n?' done':'')+(i===n?' active':'');}}
+    function startReview(){setState('progress');setStep(0);hideError();setTimeout(function(){setStep(1);},800);setTimeout(function(){setStep(2);},1600);setTimeout(function(){setStep(3);},2400);google.script.run.withSuccessHandler(onReviewSuccess).withFailureHandler(onReviewError).runReview();}
+    function onReviewSuccess(r){if(r.error){showError(r.error);setState('idle');return;}analysisData=r;displayResults(r);setState('results');}
+    function onReviewError(e){showError('Review failed: '+e.message);setState('idle');}
+    function displayResults(d){var t=d.total_score||0;var el=document.getElementById('score-value');var c=t<=10?'score-low':t<=20?'score-mid':'score-high';el.className='score-number '+c;el.innerHTML=t+'<span class="score-max"> / 30</span>';var es=d.executive_summary||{};document.getElementById('score-interpretation').textContent=es.overall_interpretation||'';var l=document.getElementById('improvements');l.innerHTML='';(es.improvements||[]).slice(0,3).forEach(function(i){var li=document.createElement('li');li.className='improvement-item';li.textContent=i;l.appendChild(li);});}
+    function prefillChat(t){document.getElementById('chat-input').value=t;}
+    function sendChat(){var input=document.getElementById('chat-input');var m=input.value.trim();if(!m)return;appendMessage('user',m);input.value='';google.script.run.withSuccessHandler(function(r){if(r.reply)appendMessage('assistant',r.reply);else if(r.error)appendMessage('assistant','Error: '+r.error);}).withFailureHandler(function(e){appendMessage('assistant','Failed: '+e.message);}).sendChatMessage(m);}
+    function appendMessage(role,content){var c=document.getElementById('chat-messages');if(c.querySelector('.suggestions'))c.innerHTML='';var d=document.createElement('div');d.className='msg '+role;d.innerHTML='<span class="msg-role">'+(role==='user'?'You':'RCA Reviewer')+'</span><div class="msg-content">'+escapeHtml(content)+'</div>';c.appendChild(d);c.scrollTop=c.scrollHeight;}
+    function escapeHtml(t){var d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+    function showError(m){var e=document.getElementById('error-msg');e.textContent=m;e.style.display='block';}
+    function hideError(){document.getElementById('error-msg').style.display='none';}
+  </script>
+</body>
+</html>`,
+
   'appsscript.json': `{
   "timeZone": "America/New_York",
   "dependencies": {
