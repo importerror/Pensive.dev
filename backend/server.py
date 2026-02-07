@@ -10,12 +10,14 @@ from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
 from openai import AsyncOpenAI
 
+import certifi
+
 load_dotenv()
 
 app = FastAPI(title="RCA Reviewer API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-client = AsyncIOMotorClient(os.environ.get("MONGO_URL"))
+client = AsyncIOMotorClient(os.environ.get("MONGO_URL"), tlsCAFile=certifi.where())
 db = client[os.environ.get("DB_NAME")]
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
