@@ -311,6 +311,7 @@ function insertComments(doc, rcaBody, comments, existingIssues) {
     Logger.log('Comment errors: ' + JSON.stringify(errors));
   }
   Logger.log('Created ' + created + ' comments, ' + errors.length + ' errors');
+  return { created: created, errors: errors };
 }`,
 
   'ApiService.gs': `/**
