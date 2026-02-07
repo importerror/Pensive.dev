@@ -139,11 +139,14 @@ function generateReviewTab(doc, analysis) {
   
   var body = summaryDoc.getBody();
   
-  // Safe clear: remove all children except last, then clear last paragraph
-  while (body.getNumChildren() > 1) {
+  // Safe clear: append placeholder first, then remove all old content
+  var placeholder = body.appendParagraph('---');
+  var numToRemove = body.getNumChildren() - 1;
+  for (var r = 0; r < numToRemove; r++) {
     body.removeChild(body.getChild(0));
   }
-  body.getChild(0).asText().setText('');
+  // Remove the placeholder text
+  placeholder.setText('');
   
   var es = analysis.executive_summary;
   var totalScore = analysis.total_score;
