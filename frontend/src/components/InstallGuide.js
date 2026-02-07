@@ -498,6 +498,8 @@ function callBackendAPI(endpoint, payload) {
   "runtimeVersion": "V8",
   "oauthScopes": [
     "https://www.googleapis.com/auth/documents.currentonly",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/script.external_request",
     "https://www.googleapis.com/auth/script.container.ui"
