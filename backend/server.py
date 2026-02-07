@@ -210,12 +210,16 @@ async def chat_rca(req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
 
     history = []
-    cursor = db.chat_messages.find(
-        {"session_id": session_id},
-        {"_id": 0}
-    ).sort("created_at", 1).limit(20)
-    async for msg in cursor:
-        history.append({"role": msg["role"], "content": msg["content"]})
+    try:
+        if db is not None:
+            cursor = db.chat_messages.find(
+                {"session_id": session_id},
+                {"_id": 0}
+            ).sort("created_at", 1).limit(20)
+            async for msg in cursor:
+                history.append({"role": msg["role"], "content": msg["content"]})
+    except Exception as e:
+        logger.warning(f"DB read failed (non-critical): {e}")
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT_CHAT}]
 
