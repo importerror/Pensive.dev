@@ -29,17 +29,11 @@ function showSidebar() {
  */
 function runReview() {
   var doc = DocumentApp.getActiveDocument();
-  var rcaTab = findOrCreateTab(doc, 'RCA');
-  
-  if (!rcaTab) {
-    return { error: 'RCA tab not found. Please create a tab named "RCA" with your content.' };
-  }
-  
-  var rcaBody = rcaTab.asDocumentTab().getBody();
-  var rcaText = rcaBody.getText();
+  var body = doc.getBody();
+  var rcaText = body.getText();
   
   if (!rcaText.trim()) {
-    return { error: 'RCA tab is empty. Please write your RCA content first.' };
+    return { error: 'Document is empty. Please write your RCA content first.' };
   }
   
   // Get existing issue tracking
@@ -56,10 +50,10 @@ function runReview() {
     return { error: analysis.error };
   }
   
-  // Insert inline comments in RCA tab
-  insertComments(doc, rcaBody, analysis.comments, existingIssues);
+  // Insert inline comments in document
+  insertComments(doc, body, analysis.comments, existingIssues);
   
-  // Create/update RCA Review tab
+  // Create/update RCA Summary tab
   generateReviewTab(doc, analysis);
   
   // Store issue tracking
