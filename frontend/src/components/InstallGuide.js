@@ -279,7 +279,7 @@ function escapeRegex(str) {
  * Backend API communication
  */
 
-var API_BASE_URL = 'YOUR_BACKEND_URL_HERE'; // Replace with your deployed backend URL
+var API_BASE_URL = 'https://pensivedev-production.up.railway.app'; // Your deployed backend URL
 
 function callBackendAPI(endpoint, payload) {
   try {
