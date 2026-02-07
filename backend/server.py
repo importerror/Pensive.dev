@@ -193,7 +193,11 @@ Respond with this exact JSON structure:
         "timestamp": timestamp
     }
 
-    await db.analyses.insert_one({**analysis, "_id_str": analysis["analysis_id"]})
+    try:
+        if db is not None:
+            await db.analyses.insert_one({**analysis, "_id_str": analysis["analysis_id"]})
+    except Exception as e:
+        logger.warning(f"DB write failed (non-critical): {e}")
 
     return analysis
 
