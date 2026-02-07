@@ -138,7 +138,12 @@ function generateReviewTab(doc, analysis) {
   }
   
   var body = summaryDoc.getBody();
-  body.clear();
+  
+  // Safe clear: remove all children except last, then clear last paragraph
+  while (body.getNumChildren() > 1) {
+    body.removeChild(body.getChild(0));
+  }
+  body.getChild(0).asText().setText('');
   
   var es = analysis.executive_summary;
   var totalScore = analysis.total_score;
