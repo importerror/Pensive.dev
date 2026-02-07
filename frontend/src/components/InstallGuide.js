@@ -45,32 +45,32 @@ function runReview() {
 }
 
 /**
- * Called from sidebar after results display, or from Extensions menu.
+ * Called from Extensions menu ONLY (not sidebar).
  * Creates real Google Docs comments using Drive API v3.
+ * Uses alerts between comments to ensure proper anchoring.
  */
 function applyComments() {
+  var ui = DocumentApp.getUi();
   var props = PropertiesService.getDocumentProperties();
   var raw = props.getProperty('pending_analysis');
-  if (!raw) return { created: 0, total: 0, error: 'No analysis found. Run review first.' };
+  if (!raw) {
+    ui.alert('No analysis found. Run RCA Review from the sidebar first.');
+    return;
+  }
 
   var analysis = JSON.parse(raw);
   var doc = DocumentApp.getActiveDocument();
   var docId = doc.getId();
+  var rcaText = doc.getBody().getText();
   var comments = analysis.comments || [];
   var created = 0;
-  var errors = [];
 
   for (var i = 0; i < comments.length; i++) {
-    // Re-read document text each iteration to stay in sync
-    var rcaText = DocumentApp.getActiveDocument().getBody().getText();
     var c = comments[i];
     if (!c.anchor_text || !c.comment_body) continue;
 
     var anchor = c.anchor_text.trim();
-
-    // Find anchor in document
     if (rcaText.indexOf(anchor) === -1) {
-      // Try shorter match
       var words = anchor.split(/\\s+/);
       var matched = false;
       for (var len = Math.min(words.length, 10); len >= 3; len--) {
@@ -81,30 +81,22 @@ function applyComments() {
           break;
         }
       }
-      if (!matched) {
-        errors.push(c.issue_type + ': no match');
-        continue;
-      }
+      if (!matched) continue;
     }
 
     try {
-      Drive.Comments.create(
-        {
-          content: c.comment_body,
-          quotedFileContent: { mimeType: 'text/plain', value: anchor }
-        },
-        docId,
-        { fields: 'id' }
+      var result = Drive.Comments.create(
+        { content: c.comment_body, quotedFileContent: { mimeType: 'text/plain', value: anchor } },
+        docId, { fields: 'id' }
       );
       created++;
-      // Wait between comments to let Google Docs sync
-      Utilities.sleep(1500);
+      ui.alert('Comment ' + created + '/' + comments.length + ': ' + c.issue_type + ' (ID: ' + result.id + ')');
     } catch (e) {
-      errors.push(c.issue_type + ': ' + e.toString());
+      ui.alert('Failed: ' + c.issue_type + '\\n' + e.toString());
     }
   }
 
-  return { created: created, total: comments.length, errors: errors };
+  ui.alert('Done! Created ' + created + ' comments.');
 }
 
 /**
