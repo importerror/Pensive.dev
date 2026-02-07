@@ -254,8 +254,7 @@ function generateReviewTab(doc, analysis) {
 
   'CommentService.gs': `/**
  * Creates real Google Docs comments using Drive API v3.
- * IMPORTANT: You must enable Drive API v3 in Apps Script:
- *   Click "+" next to Services > Search "Drive API" > Select v3 > Add
+ * Enable Drive API v3: Click "+" next to Services > "Drive API" > v3 > Add
  */
 
 function insertComments(doc, rcaBody, comments, existingIssues) {
@@ -264,6 +263,7 @@ function insertComments(doc, rcaBody, comments, existingIssues) {
   var commentMap = JSON.parse(props.getProperty('comment_map') || '{}');
   var errors = [];
   var created = 0;
+  var docText = rcaBody.getText();
   
   for (var i = 0; i < comments.length; i++) {
     var comment = comments[i];
@@ -275,10 +275,15 @@ function insertComments(doc, rcaBody, comments, existingIssues) {
       continue;
     }
     
+    // Find a matching anchor in the actual document text
+    var anchor = findBestAnchor(comment.anchor_text, docText);
+    
+    if (!anchor) {
+      errors.push(comment.issue_type + ': anchor text not found in doc');
+      continue;
+    }
+    
     try {
-      // Trim anchor text to max 200 chars for better matching
-      var anchor = comment.anchor_text.substring(0, 200).trim();
-      
       var result = Drive.Comments.create(
         {
           content: comment.comment_body,
@@ -301,17 +306,47 @@ function insertComments(doc, rcaBody, comments, existingIssues) {
       }
     } catch (e) {
       errors.push(comment.issue_type + ': ' + e.toString());
-      Logger.log('Comment error: ' + e.toString());
     }
   }
   
   props.setProperty('comment_map', JSON.stringify(commentMap));
-  
-  if (errors.length > 0) {
-    Logger.log('Comment errors: ' + JSON.stringify(errors));
-  }
   Logger.log('Created ' + created + ' comments, ' + errors.length + ' errors');
+  if (errors.length > 0) Logger.log('Errors: ' + JSON.stringify(errors));
   return { created: created, errors: errors };
+}
+
+/**
+ * Find the best matching anchor text in the document.
+ * Tries exact match first, then progressively shorter substrings.
+ */
+function findBestAnchor(anchorText, docText) {
+  // Clean up the anchor
+  var clean = anchorText.trim();
+  
+  // Try exact match
+  if (docText.indexOf(clean) !== -1) {
+    return clean.substring(0, 200);
+  }
+  
+  // Try progressively shorter substrings from the start
+  var words = clean.split(/\\s+/);
+  for (var len = Math.min(words.length, 15); len >= 3; len--) {
+    var attempt = words.slice(0, len).join(' ');
+    if (docText.indexOf(attempt) !== -1) {
+      return attempt;
+    }
+  }
+  
+  // Try from the middle of the anchor
+  if (words.length > 6) {
+    var mid = Math.floor(words.length / 2) - 3;
+    var midAttempt = words.slice(mid, mid + 6).join(' ');
+    if (docText.indexOf(midAttempt) !== -1) {
+      return midAttempt;
+    }
+  }
+  
+  return null;
 }`,
 
   'ApiService.gs': `/**
