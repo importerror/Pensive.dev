@@ -100,32 +100,44 @@ function sendChatMessage(message) {
 }`,
 
   'DocumentService.gs': `/**
- * Document Tab management
+ * Document management - creates RCA Summary as a linked Google Doc
  */
 
-function findOrCreateTab(doc, tabName) {
-  var tabs = doc.getTabs();
-  for (var i = 0; i < tabs.length; i++) {
-    if (tabs[i].getTitle() === tabName) {
-      return tabs[i];
+function generateReviewTab(doc, analysis) {
+  var props = PropertiesService.getDocumentProperties();
+  var summaryDocId = props.getProperty('rca_summary_doc_id');
+  var summaryDoc = null;
+  
+  // Try to open existing summary doc
+  if (summaryDocId) {
+    try {
+      summaryDoc = DocumentApp.openById(summaryDocId);
+    } catch (e) {
+      summaryDoc = null;
     }
   }
-  return null;
-}
-
-function getOrCreateReviewTab(doc) {
-  var tab = findOrCreateTab(doc, 'RCA Review');
-  if (!tab) {
-    tab = doc.addTab('RCA Review');
-  }
-  return tab;
-}
-
-function generateReviewTab(doc, analysis) {
-  var tab = getOrCreateReviewTab(doc);
-  var body = tab.asDocumentTab().getBody();
   
-  // Clear existing content
+  // Create new summary doc if needed
+  if (!summaryDoc) {
+    var docName = doc.getName() + ' - RCA Summary';
+    summaryDoc = DocumentApp.create(docName);
+    summaryDocId = summaryDoc.getId();
+    props.setProperty('rca_summary_doc_id', summaryDocId);
+    
+    // Move to same folder as original doc
+    try {
+      var file = DriveApp.getFileById(doc.getId());
+      var folders = file.getParents();
+      if (folders.hasNext()) {
+        var folder = folders.next();
+        DriveApp.getFileById(summaryDocId).moveTo(folder);
+      }
+    } catch (e) {
+      Logger.log('Could not move summary doc: ' + e.toString());
+    }
+  }
+  
+  var body = summaryDoc.getBody();
   body.clear();
   
   var es = analysis.executive_summary;
@@ -140,6 +152,11 @@ function generateReviewTab(doc, analysis) {
   var subtitle = body.appendParagraph('Auto-generated. Updated on ' + timestamp + '.');
   subtitle.setForegroundColor('#5f6368');
   subtitle.setFontSize(10);
+  
+  var link = body.appendParagraph('Source: ' + doc.getName());
+  link.setLinkUrl(doc.getUrl());
+  link.setForegroundColor('#1a73e8');
+  link.setFontSize(10);
   
   body.appendParagraph('');
   
@@ -194,6 +211,9 @@ function generateReviewTab(doc, analysis) {
   for (var i = 0; i < improvements.length; i++) {
     body.appendListItem(improvements[i]).setGlyphType(DocumentApp.GlyphType.BULLET);
   }
+  
+  summaryDoc.saveAndClose();
+  return summaryDocId;
 }`,
 
   'CommentService.gs': `/**
