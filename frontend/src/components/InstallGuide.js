@@ -222,69 +222,64 @@ function generateReviewTab(doc, analysis) {
 }`,
 
   'CommentService.gs': `/**
- * Comment management using Drive API v3 for real Google Docs comments
+ * Creates real Google Docs comments using Drive API v3.
+ * IMPORTANT: You must enable Drive API v3 in Apps Script:
+ *   Click "+" next to Services > Search "Drive API" > Select v3 > Add
  */
 
 function insertComments(doc, rcaBody, comments, existingIssues) {
   var docId = doc.getId();
   var props = PropertiesService.getDocumentProperties();
   var commentMap = JSON.parse(props.getProperty('comment_map') || '{}');
+  var errors = [];
+  var created = 0;
   
   for (var i = 0; i < comments.length; i++) {
     var comment = comments[i];
-    
     if (comment.resolved) continue;
+    if (!comment.anchor_text || !comment.comment_body) continue;
     
-    var anchorText = comment.anchor_text;
-    if (!anchorText) continue;
-    
-    // Skip if we already created a comment for this issue
+    // Skip duplicates
     if (commentMap[comment.issue_id] && commentMap[comment.issue_id].drive_comment_id) {
-      // Update existing comment by adding a reply
-      try {
-        var existingCommentId = commentMap[comment.issue_id].drive_comment_id;
-        Drive.Replies.create(
-          { content: comment.comment_body, action: 'reopen' },
-          docId,
-          existingCommentId,
-          { fields: 'id' }
-        );
-      } catch (e) {
-        Logger.log('Could not update comment, creating new: ' + e.toString());
-        createNewComment(docId, comment, commentMap);
-      }
       continue;
     }
     
-    createNewComment(docId, comment, commentMap);
+    try {
+      // Trim anchor text to max 200 chars for better matching
+      var anchor = comment.anchor_text.substring(0, 200).trim();
+      
+      var result = Drive.Comments.create(
+        {
+          content: comment.comment_body,
+          quotedFileContent: {
+            mimeType: 'text/plain',
+            value: anchor
+          }
+        },
+        docId,
+        { fields: 'id' }
+      );
+      
+      if (result && result.id) {
+        commentMap[comment.issue_id] = {
+          drive_comment_id: result.id,
+          issue_type: comment.issue_type,
+          timestamp: new Date().toISOString()
+        };
+        created++;
+      }
+    } catch (e) {
+      errors.push(comment.issue_type + ': ' + e.toString());
+      Logger.log('Comment error: ' + e.toString());
+    }
   }
   
   props.setProperty('comment_map', JSON.stringify(commentMap));
-}
-
-function createNewComment(docId, comment, commentMap) {
-  try {
-    var resource = {
-      content: comment.comment_body,
-      quotedFileContent: {
-        mimeType: 'text/plain',
-        value: comment.anchor_text
-      }
-    };
-    
-    var result = Drive.Comments.create(resource, docId, { fields: 'id,content,quotedFileContent' });
-    
-    commentMap[comment.issue_id] = {
-      drive_comment_id: result.id,
-      issue_type: comment.issue_type,
-      anchor_text: comment.anchor_text,
-      timestamp: new Date().toISOString()
-    };
-    
-    Logger.log('Created comment: ' + result.id + ' for issue: ' + comment.issue_id);
-  } catch (e) {
-    Logger.log('Error creating comment: ' + e.toString());
+  
+  if (errors.length > 0) {
+    Logger.log('Comment errors: ' + JSON.stringify(errors));
   }
+  Logger.log('Created ' + created + ' comments, ' + errors.length + ' errors');
 }`,
 
   'ApiService.gs': `/**
