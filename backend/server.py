@@ -292,19 +292,27 @@ Provide a professional, direct response. If the user has addressed the issue, ac
 @app.get("/api/analyses")
 async def get_analyses():
     analyses = []
-    cursor = db.analyses.find({}, {"_id": 0}).sort("timestamp", -1).limit(10)
-    async for doc in cursor:
-        analyses.append(doc)
+    try:
+        if db is not None:
+            cursor = db.analyses.find({}, {"_id": 0}).sort("timestamp", -1).limit(10)
+            async for doc in cursor:
+                analyses.append(doc)
+    except Exception as e:
+        logger.warning(f"DB read failed: {e}")
     return analyses
 
 
 @app.get("/api/chat-history/{session_id}")
 async def get_chat_history(session_id: str):
     messages = []
-    cursor = db.chat_messages.find(
-        {"session_id": session_id},
-        {"_id": 0}
-    ).sort("created_at", 1)
-    async for msg in cursor:
-        messages.append(msg)
+    try:
+        if db is not None:
+            cursor = db.chat_messages.find(
+                {"session_id": session_id},
+                {"_id": 0}
+            ).sort("created_at", 1)
+            async for msg in cursor:
+                messages.append(msg)
+    except Exception as e:
+        logger.warning(f"DB read failed: {e}")
     return messages
