@@ -66,8 +66,9 @@ function runReview() {
     return { error: 'Document is empty. Please write your RCA content first.' };
   }
   
-  // Get existing issue tracking
+  // Clear stale comment tracking for fresh run
   var props = PropertiesService.getDocumentProperties();
+  props.deleteProperty('comment_map');
   var existingIssues = JSON.parse(props.getProperty('rca_issues') || '[]');
   
   // Call backend API
