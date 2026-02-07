@@ -26,6 +26,35 @@ function showSidebar() {
 }
 
 /**
+ * Test function - run from Extensions > RCA Reviewer > Test Comment
+ */
+function testComment() {
+  var doc = DocumentApp.getActiveDocument();
+  var docId = doc.getId();
+  var text = doc.getBody().getText();
+  var anchor = text.substring(0, 50).trim();
+  
+  if (!anchor) {
+    DocumentApp.getUi().alert('Document is empty.');
+    return;
+  }
+  
+  try {
+    var result = Drive.Comments.create(
+      {
+        content: 'Test comment from RCA Reviewer.',
+        quotedFileContent: { mimeType: 'text/plain', value: anchor }
+      },
+      docId,
+      { fields: 'id' }
+    );
+    DocumentApp.getUi().alert('SUCCESS! Comment ID: ' + result.id);
+  } catch (e) {
+    DocumentApp.getUi().alert('FAILED: ' + e.toString() + '\\n\\nEnable Drive API v3 under Services.');
+  }
+}
+
+/**
  * Run the RCA review analysis
  */
 function runReview() {
