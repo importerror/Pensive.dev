@@ -81,7 +81,8 @@ function runReview() {
   }
   
   // Insert inline comments in document
-  insertComments(doc, body, analysis.comments, existingIssues);
+  var commentResult = insertComments(doc, body, analysis.comments, existingIssues);
+  analysis.comment_status = commentResult;
   
   // Store issue tracking
   props.setProperty('rca_issues', JSON.stringify(analysis.comments));
