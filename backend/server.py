@@ -243,10 +243,14 @@ async def chat_rca(req: ChatRequest):
         raise HTTPException(500, f"Chat failed: {str(e)}")
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.chat_messages.insert_many([
-        {"session_id": session_id, "role": "user", "content": req.message, "created_at": now},
-        {"session_id": session_id, "role": "assistant", "content": reply, "created_at": now}
-    ])
+    try:
+        if db is not None:
+            await db.chat_messages.insert_many([
+                {"session_id": session_id, "role": "user", "content": req.message, "created_at": now},
+                {"session_id": session_id, "role": "assistant", "content": reply, "created_at": now}
+            ])
+    except Exception as e:
+        logger.warning(f"DB write failed (non-critical): {e}")
 
     return {"reply": reply, "session_id": session_id}
 
