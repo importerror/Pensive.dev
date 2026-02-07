@@ -81,8 +81,7 @@ function processReply(threadContext, userReply, issueType, originalComment) {
  */
 function sendChatMessage(message) {
   var doc = DocumentApp.getActiveDocument();
-  var rcaTab = findOrCreateTab(doc, 'RCA');
-  var rcaText = rcaTab ? rcaTab.asDocumentTab().getBody().getText() : '';
+  var rcaText = doc.getBody().getText();
   
   var props = PropertiesService.getDocumentProperties();
   var sessionId = props.getProperty('chat_session_id') || '';
