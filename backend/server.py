@@ -36,10 +36,15 @@ elif mongo_url:
     except Exception:
         db = None
 
-openai_api_key = os.environ.get("OPENAI_API_KEY")
-if not openai_api_key:
-    logger.warning("OPENAI_API_KEY not set - API calls will fail")
-openai_client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else None
+openai_client = None
+try:
+    openai_api_key = os.environ.get("OPENAI_API_KEY") or ""
+    if openai_api_key:
+        openai_client = AsyncOpenAI(api_key=openai_api_key)
+    else:
+        logger.warning("OPENAI_API_KEY not set - API calls will fail")
+except Exception as e:
+    logger.warning("OpenAI client init failed: %s", e)
 
 ISSUE_TYPES = [
     "Causality gap", "Weak root cause", "Missing detection",

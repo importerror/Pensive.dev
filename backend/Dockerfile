@@ -6,6 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+RUN chmod +x run.sh
 
-# Use PORT environment variable, default to 8001 for local development
-CMD uvicorn server:app --host 0.0.0.0 --port ${PORT:-8001}
+# Railway sets PORT at runtime; run.sh reads it
+CMD ["./run.sh"]
