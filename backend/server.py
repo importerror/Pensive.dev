@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 from dotenv import load_dotenv
@@ -18,25 +19,38 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-app = FastAPI(title="RCA Reviewer API")
+# Defer MongoDB and OpenAI init so app can bind to PORT immediately (avoids Railway 502)
+db = None
+openai_client = None
+_mongo_client = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Connect to MongoDB after app is listening; never block startup."""
+    global db, _mongo_client
+    mongo_url = os.environ.get("MONGO_URL", "")
+    if mongo_url:
+        try:
+            if "localhost" in mongo_url:
+                _mongo_client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+            else:
+                _mongo_client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=5000)
+            db = _mongo_client[os.environ.get("DB_NAME", "rca_reviewer")]
+            await _mongo_client.admin.command("ping")
+            logger.info("MongoDB connected")
+        except Exception as e:
+            logger.warning("MongoDB connection failed (optional): %s", e)
+            db = None
+    yield
+    if _mongo_client:
+        _mongo_client.close()
+
+
+app = FastAPI(title="RCA Reviewer API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-mongo_url = os.environ.get("MONGO_URL", "")
-db = None
-if mongo_url and "localhost" in mongo_url:
-    try:
-        client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000)
-        db = client[os.environ.get("DB_NAME", "rca_reviewer")]
-    except Exception:
-        db = None
-elif mongo_url:
-    try:
-        client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=2000)
-        db = client[os.environ.get("DB_NAME", "rca_reviewer")]
-    except Exception:
-        db = None
-
-openai_client = None
+# OpenAI client: init at module load; safe if key missing
 try:
     openai_api_key = os.environ.get("OPENAI_API_KEY") or ""
     if openai_api_key:
