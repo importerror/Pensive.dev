@@ -166,17 +166,33 @@ function callBackendAPI(endpoint, payload) {
       contentType: 'application/json',
       payload: JSON.stringify(payload),
       muteHttpExceptions: true,
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Accept': 'application/json' },
+      // Set timeout to 5 minutes (300000ms) - Apps Script max is 6 minutes
+      // For analyze-rca, this should be enough; if it times out, the user will see an error
+      'timeout': 300000
     };
     var response = UrlFetchApp.fetch(API_BASE_URL + endpoint, options);
     var code = response.getResponseCode();
     if (code === 200) {
       return JSON.parse(response.getContentText());
     } else {
-      return { error: 'API failed with status ' + code };
+      var errorText = response.getContentText();
+      try {
+        var errorJson = JSON.parse(errorText);
+        if (errorJson.detail) {
+          return { error: 'API error: ' + errorJson.detail };
+        }
+      } catch (e) {
+        // Not JSON, use raw text
+      }
+      return { error: 'API failed with status ' + code + (errorText ? ': ' + errorText.substring(0, 200) : '') };
     }
   } catch (e) {
-    return { error: 'Connection failed: ' + e.toString() };
+    var errorMsg = e.toString();
+    if (errorMsg.indexOf('timeout') !== -1 || errorMsg.indexOf('Timeout') !== -1) {
+      return { error: 'Request timed out. The analysis is taking too long. Please try again or check your document size.' };
+    }
+    return { error: 'Connection failed: ' + errorMsg };
   }
 }`,
 
@@ -362,16 +378,33 @@ function callBackendAPI(endpoint, payload) {
       }
     }
 
+    var reviewTimeoutId = null;
     function startReview() {
       setState('progress');
       setStep(0);
       hideError();
+      // Clear any existing timeout
+      if (reviewTimeoutId) clearTimeout(reviewTimeoutId);
       setTimeout(function() { setStep(1); }, 800);
       setTimeout(function() { setStep(2); }, 1600);
       setTimeout(function() { setStep(3); }, 2400);
+      // Set a client-side timeout (6 minutes = 360000ms) to catch hanging requests
+      reviewTimeoutId = setTimeout(function() {
+        showError('Review is taking too long. This may be due to a large document or network issues. Please try again.');
+        setState('idle');
+        reviewTimeoutId = null;
+      }, 360000);
       google.script.run
-        .withSuccessHandler(onReviewSuccess)
-        .withFailureHandler(onReviewError)
+        .withSuccessHandler(function(r) {
+          if (reviewTimeoutId) clearTimeout(reviewTimeoutId);
+          reviewTimeoutId = null;
+          onReviewSuccess(r);
+        })
+        .withFailureHandler(function(e) {
+          if (reviewTimeoutId) clearTimeout(reviewTimeoutId);
+          reviewTimeoutId = null;
+          onReviewError(e);
+        })
         .runReview();
     }
 
