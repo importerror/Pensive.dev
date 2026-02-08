@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added validation for missing OPENAI_API_KEY to prevent startup failures
 - Fixed IndentationError in server.py chat exception block (line 284) that caused container crash
 - Added run.sh entrypoint to read PORT at runtime (fixes Railway 502 when using Docker)
+- Dockerfile CMD switched to exec form with sh -c so PORT is expanded at runtime (fixes connection refused)
 - Safer OpenAI client init so startup does not crash on missing key
 - Fixed infinite loop in Google Docs add-on when API calls hang - added 5-minute timeout to API requests
 - Added client-side timeout handling (6 minutes) to show error messages instead of hanging indefinitely
