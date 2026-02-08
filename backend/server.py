@@ -36,7 +36,10 @@ elif mongo_url:
     except Exception:
         db = None
 
-openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+openai_api_key = os.environ.get("OPENAI_API_KEY")
+if not openai_api_key:
+    logger.warning("OPENAI_API_KEY not set - API calls will fail")
+openai_client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else None
 
 ISSUE_TYPES = [
     "Causality gap", "Weak root cause", "Missing detection",
@@ -123,6 +126,9 @@ async def health():
 async def analyze_rca(req: AnalyzeRequest):
     if not req.document_text.strip():
         raise HTTPException(400, "Document text is empty")
+    
+    if not openai_client:
+        raise HTTPException(500, "OpenAI API key not configured")
 
     existing_ids = []
     if req.existing_issues:
@@ -237,6 +243,9 @@ Respond with this exact JSON structure:
 async def chat_rca(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(400, "Message is empty")
+    
+    if not openai_client:
+        raise HTTPException(500, "OpenAI API key not configured")
 
     session_id = req.session_id or str(uuid.uuid4())
 
@@ -293,6 +302,9 @@ async def chat_rca(req: ChatRequest):
 async def process_reply(req: ReplyRequest):
     if not req.user_reply.strip():
         raise HTTPException(400, "Reply is empty")
+    
+    if not openai_client:
+        raise HTTPException(500, "OpenAI API key not configured")
 
     prompt = f"""You are reviewing an RCA document. A user replied to your inline comment.
 
