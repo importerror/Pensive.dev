@@ -155,7 +155,7 @@ Respond with this exact JSON structure:
     {{
       "issue_id": "unique-id-string",
       "issue_type": "one of the 7 issue types",
-      "anchor_text": "CRITICAL: copy-paste 5-15 words EXACTLY as they appear in the RCA text, character for character. Do not paraphrase or summarize. This must be a verbatim substring.",
+      "anchor_text": "CRITICAL: This MUST be a verbatim, character-for-character copy of 3-10 consecutive words from the RCA text above. Do NOT paraphrase, rephrase, abbreviate, or add words. Copy-paste directly. Shorter is better - pick a unique phrase that appears exactly once.",
       "comment_body": "[Issue Type]\\nExplanation...\\nRecommendation: ...",
       "resolved": false
     }}
@@ -188,13 +188,35 @@ Respond with this exact JSON structure:
     scores = result.get("scores", {})
     total = sum(s.get("score", 0) for s in scores.values())
 
+    # Validate anchor_text: ensure each is a verbatim substring of the document
+    comments = result.get("comments", [])
+    doc_text = req.document_text
+    for comment in comments:
+        anchor = comment.get("anchor_text", "")
+        if anchor and anchor not in doc_text:
+            # Try to find a shorter matching substring
+            words = anchor.split()
+            found = False
+            # Try progressively shorter windows of consecutive words
+            for length in range(len(words), 2, -1):
+                for start_idx in range(len(words) - length + 1):
+                    candidate = " ".join(words[start_idx:start_idx + length])
+                    if candidate in doc_text:
+                        comment["anchor_text"] = candidate
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                logger.warning(f"Anchor text not found in document: {anchor[:80]}")
+
     timestamp = datetime.now(timezone.utc).isoformat()
 
     analysis = {
         "analysis_id": str(uuid.uuid4()),
         "score": scores,
         "total_score": total,
-        "comments": result.get("comments", []),
+        "comments": comments,
         "executive_summary": result.get("executive_summary", {}),
         "timestamp": timestamp
     }

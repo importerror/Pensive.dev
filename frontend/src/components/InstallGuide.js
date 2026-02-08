@@ -64,6 +64,8 @@ function applyComments() {
   var comments = analysis.comments || [];
   var created = 0;
 
+  var docText = body.getText();
+
   for (var i = 0; i < comments.length; i++) {
     var c = comments[i];
     if (!c.comment_body) continue;
@@ -71,29 +73,44 @@ function applyComments() {
     var anchor = (c.anchor_text || '').trim();
     var commentText = c.comment_body;
 
-    // Try anchored comment first
+    // Try anchored comment: find exact text in document
     var success = false;
     if (anchor) {
-      var searchResult = body.findText(anchor.substring(0, 80));
-      if (searchResult) {
-        // Highlight the matched text
-        var elem = searchResult.getElement();
-        var start = searchResult.getStartOffset();
-        var end = searchResult.getEndOffsetInclusive();
-        elem.editAsText().setBackgroundColor(start, end, '#fce8b2');
+      // Try to find the anchor text in the document (try progressively shorter snippets)
+      var matchedText = null;
+      var searchLengths = [anchor.length, 80, 50, 30];
+      for (var s = 0; s < searchLengths.length; s++) {
+        var snippet = anchor.substring(0, Math.min(searchLengths[s], anchor.length));
+        if (!snippet.trim()) continue;
+
+        // First verify it exists as a substring in the plain text
+        if (docText.indexOf(snippet) === -1) continue;
+
+        var searchResult = body.findText(snippet.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&'));
+        if (searchResult) {
+          // Extract the ACTUAL text from the document element
+          var elem = searchResult.getElement();
+          var start = searchResult.getStartOffset();
+          var end = searchResult.getEndOffsetInclusive();
+          matchedText = elem.asText().getText().substring(start, end + 1);
+          elem.editAsText().setBackgroundColor(start, end, '#fce8b2');
+          break;
+        }
       }
 
-      try {
-        Drive.Comments.create(
-          {
-            content: commentText,
-            quotedFileContent: { mimeType: 'text/plain', value: anchor.substring(0, 100) }
-          },
-          docId, { fields: 'id' }
-        );
-        success = true;
-      } catch (e) {
-        // Fall through to unanchored
+      if (matchedText) {
+        try {
+          Drive.Comments.create(
+            {
+              content: commentText,
+              quotedFileContent: { mimeType: 'text/plain', value: matchedText }
+            },
+            docId, { fields: 'id' }
+          );
+          success = true;
+        } catch (e) {
+          // Fall through to unanchored
+        }
       }
     }
 
