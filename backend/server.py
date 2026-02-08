@@ -281,9 +281,9 @@ async def chat_rca(req: ChatRequest):
         reply = response.choices[0].message.content
     except Exception as e:
         err_msg = str(e)
-            if "<!DOCTYPE html>" in err_msg or "<html" in err_msg.lower():
-                err_msg = "OpenAI request blocked or invalid (proxy/firewall or invalid API key). Check OPENAI_API_KEY and network."
-            raise HTTPException(500, f"Chat failed: {err_msg}")
+        if "<!DOCTYPE html>" in err_msg or "<html" in err_msg.lower():
+            err_msg = "OpenAI request blocked or invalid (proxy/firewall or invalid API key). Check OPENAI_API_KEY and network."
+        raise HTTPException(500, f"Chat failed: {err_msg}")
 
     now = datetime.now(timezone.utc).isoformat()
     try:
