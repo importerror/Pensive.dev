@@ -22,13 +22,19 @@ app = FastAPI(title="RCA Reviewer API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 mongo_url = os.environ.get("MONGO_URL", "")
-try:
-    client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=5000)
-    db = client[os.environ.get("DB_NAME", "rca_reviewer")]
-    db_available = True
-except Exception:
-    db_available = False
-    db = None
+db = None
+if mongo_url and "localhost" in mongo_url:
+    try:
+        client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000)
+        db = client[os.environ.get("DB_NAME", "rca_reviewer")]
+    except Exception:
+        db = None
+elif mongo_url:
+    try:
+        client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=2000)
+        db = client[os.environ.get("DB_NAME", "rca_reviewer")]
+    except Exception:
+        db = None
 
 openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
