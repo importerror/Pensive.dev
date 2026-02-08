@@ -45,9 +45,8 @@ function runReview() {
 }
 
 /**
- * Called from Extensions menu ONLY (not sidebar).
- * Creates real Google Docs comments using Drive API v3.
- * Uses alerts between comments to ensure proper anchoring.
+ * Called from Extensions menu: Extensions > RCA Reviewer > Apply Comments.
+ * Creates Google Docs comments with quoted text in the comment body.
  */
 function applyComments() {
   var ui = DocumentApp.getUi();
@@ -61,42 +60,65 @@ function applyComments() {
   var analysis = JSON.parse(raw);
   var doc = DocumentApp.getActiveDocument();
   var docId = doc.getId();
-  var rcaText = doc.getBody().getText();
+  var body = doc.getBody();
   var comments = analysis.comments || [];
   var created = 0;
 
   for (var i = 0; i < comments.length; i++) {
     var c = comments[i];
-    if (!c.anchor_text || !c.comment_body) continue;
+    if (!c.comment_body) continue;
 
-    var anchor = c.anchor_text.trim();
-    if (rcaText.indexOf(anchor) === -1) {
-      var words = anchor.split(/\\s+/);
-      var matched = false;
-      for (var len = Math.min(words.length, 10); len >= 3; len--) {
-        var attempt = words.slice(0, len).join(' ');
-        if (rcaText.indexOf(attempt) !== -1) {
-          anchor = attempt;
-          matched = true;
-          break;
-        }
+    var anchor = (c.anchor_text || '').trim();
+    var commentText = c.comment_body;
+
+    // Try anchored comment first
+    var success = false;
+    if (anchor) {
+      var searchResult = body.findText(anchor.substring(0, 80));
+      if (searchResult) {
+        // Highlight the matched text
+        var elem = searchResult.getElement();
+        var start = searchResult.getStartOffset();
+        var end = searchResult.getEndOffsetInclusive();
+        elem.editAsText().setBackgroundColor(start, end, '#fce8b2');
       }
-      if (!matched) continue;
+
+      try {
+        Drive.Comments.create(
+          {
+            content: commentText,
+            quotedFileContent: { mimeType: 'text/plain', value: anchor.substring(0, 100) }
+          },
+          docId, { fields: 'id' }
+        );
+        success = true;
+      } catch (e) {
+        // Fall through to unanchored
+      }
     }
 
-    try {
-      var result = Drive.Comments.create(
-        { content: c.comment_body, quotedFileContent: { mimeType: 'text/plain', value: anchor } },
-        docId, { fields: 'id' }
-      );
-      created++;
-      ui.alert('Comment ' + created + '/' + comments.length + ': ' + c.issue_type + ' (ID: ' + result.id + ')');
-    } catch (e) {
-      ui.alert('Failed: ' + c.issue_type + '\\n' + e.toString());
+    // Fallback: create unanchored comment with quoted text in body
+    if (!success) {
+      try {
+        var fullComment = commentText;
+        if (anchor) {
+          fullComment = '> "' + anchor + '"\\n\\n' + commentText;
+        }
+        Drive.Comments.create(
+          { content: fullComment },
+          docId, { fields: 'id' }
+        );
+        success = true;
+      } catch (e2) {
+        ui.alert('Failed on comment ' + (i+1) + ': ' + e2.toString());
+      }
     }
+
+    if (success) created++;
+    Utilities.sleep(500);
   }
 
-  ui.alert('Done! Created ' + created + ' comments.');
+  ui.alert('Done! Created ' + created + ' of ' + comments.length + ' comments.\\nHighlighted text is marked in yellow.');
 }
 
 /**
