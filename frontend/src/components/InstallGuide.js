@@ -64,6 +64,8 @@ function applyComments() {
   var comments = analysis.comments || [];
   var created = 0;
 
+  var docText = body.getText();
+
   for (var i = 0; i < comments.length; i++) {
     var c = comments[i];
     if (!c.comment_body) continue;
@@ -71,29 +73,44 @@ function applyComments() {
     var anchor = (c.anchor_text || '').trim();
     var commentText = c.comment_body;
 
-    // Try anchored comment first
+    // Try anchored comment: find exact text in document
     var success = false;
     if (anchor) {
-      var searchResult = body.findText(anchor.substring(0, 80));
-      if (searchResult) {
-        // Highlight the matched text
-        var elem = searchResult.getElement();
-        var start = searchResult.getStartOffset();
-        var end = searchResult.getEndOffsetInclusive();
-        elem.editAsText().setBackgroundColor(start, end, '#fce8b2');
+      // Try to find the anchor text in the document (try progressively shorter snippets)
+      var matchedText = null;
+      var searchLengths = [anchor.length, 80, 50, 30];
+      for (var s = 0; s < searchLengths.length; s++) {
+        var snippet = anchor.substring(0, Math.min(searchLengths[s], anchor.length));
+        if (!snippet.trim()) continue;
+
+        // First verify it exists as a substring in the plain text
+        if (docText.indexOf(snippet) === -1) continue;
+
+        var searchResult = body.findText(snippet.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&'));
+        if (searchResult) {
+          // Extract the ACTUAL text from the document element
+          var elem = searchResult.getElement();
+          var start = searchResult.getStartOffset();
+          var end = searchResult.getEndOffsetInclusive();
+          matchedText = elem.asText().getText().substring(start, end + 1);
+          elem.editAsText().setBackgroundColor(start, end, '#fce8b2');
+          break;
+        }
       }
 
-      try {
-        Drive.Comments.create(
-          {
-            content: commentText,
-            quotedFileContent: { mimeType: 'text/plain', value: anchor.substring(0, 100) }
-          },
-          docId, { fields: 'id' }
-        );
-        success = true;
-      } catch (e) {
-        // Fall through to unanchored
+      if (matchedText) {
+        try {
+          Drive.Comments.create(
+            {
+              content: commentText,
+              quotedFileContent: { mimeType: 'text/plain', value: matchedText }
+            },
+            docId, { fields: 'id' }
+          );
+          success = true;
+        } catch (e) {
+          // Fall through to unanchored
+        }
       }
     }
 
@@ -149,17 +166,33 @@ function callBackendAPI(endpoint, payload) {
       contentType: 'application/json',
       payload: JSON.stringify(payload),
       muteHttpExceptions: true,
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Accept': 'application/json' },
+      // Set timeout to 5 minutes (300000ms) - Apps Script max is 6 minutes
+      // For analyze-rca, this should be enough; if it times out, the user will see an error
+      'timeout': 300000
     };
     var response = UrlFetchApp.fetch(API_BASE_URL + endpoint, options);
     var code = response.getResponseCode();
     if (code === 200) {
       return JSON.parse(response.getContentText());
     } else {
-      return { error: 'API failed with status ' + code };
+      var errorText = response.getContentText();
+      try {
+        var errorJson = JSON.parse(errorText);
+        if (errorJson.detail) {
+          return { error: 'API error: ' + errorJson.detail };
+        }
+      } catch (e) {
+        // Not JSON, use raw text
+      }
+      return { error: 'API failed with status ' + code + (errorText ? ': ' + errorText.substring(0, 200) : '') };
     }
   } catch (e) {
-    return { error: 'Connection failed: ' + e.toString() };
+    var errorMsg = e.toString();
+    if (errorMsg.indexOf('timeout') !== -1 || errorMsg.indexOf('Timeout') !== -1) {
+      return { error: 'Request timed out. The analysis is taking too long. Please try again or check your document size.' };
+    }
+    return { error: 'Connection failed: ' + errorMsg };
   }
 }`,
 
@@ -345,16 +378,33 @@ function callBackendAPI(endpoint, payload) {
       }
     }
 
+    var reviewTimeoutId = null;
     function startReview() {
       setState('progress');
       setStep(0);
       hideError();
+      // Clear any existing timeout
+      if (reviewTimeoutId) clearTimeout(reviewTimeoutId);
       setTimeout(function() { setStep(1); }, 800);
       setTimeout(function() { setStep(2); }, 1600);
       setTimeout(function() { setStep(3); }, 2400);
+      // Set a client-side timeout (6 minutes = 360000ms) to catch hanging requests
+      reviewTimeoutId = setTimeout(function() {
+        showError('Review is taking too long. This may be due to a large document or network issues. Please try again.');
+        setState('idle');
+        reviewTimeoutId = null;
+      }, 360000);
       google.script.run
-        .withSuccessHandler(onReviewSuccess)
-        .withFailureHandler(onReviewError)
+        .withSuccessHandler(function(r) {
+          if (reviewTimeoutId) clearTimeout(reviewTimeoutId);
+          reviewTimeoutId = null;
+          onReviewSuccess(r);
+        })
+        .withFailureHandler(function(e) {
+          if (reviewTimeoutId) clearTimeout(reviewTimeoutId);
+          reviewTimeoutId = null;
+          onReviewError(e);
+        })
         .runReview();
     }
 

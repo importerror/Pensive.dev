@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 from dotenv import load_dotenv
@@ -18,25 +19,46 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-app = FastAPI(title="RCA Reviewer API")
+# Defer MongoDB and OpenAI init so app can bind to PORT immediately (avoids Railway 502)
+db = None
+openai_client = None
+_mongo_client = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Connect to MongoDB after app is listening; never block startup."""
+    global db, _mongo_client
+    mongo_url = os.environ.get("MONGO_URL", "")
+    if mongo_url:
+        try:
+            if "localhost" in mongo_url:
+                _mongo_client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
+            else:
+                _mongo_client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=5000)
+            db = _mongo_client[os.environ.get("DB_NAME", "rca_reviewer")]
+            await _mongo_client.admin.command("ping")
+            logger.info("MongoDB connected")
+        except Exception as e:
+            logger.warning("MongoDB connection failed (optional): %s", e)
+            db = None
+    yield
+    if _mongo_client:
+        _mongo_client.close()
+
+
+app = FastAPI(title="RCA Reviewer API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-mongo_url = os.environ.get("MONGO_URL", "")
-db = None
-if mongo_url and "localhost" in mongo_url:
-    try:
-        client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=2000)
-        db = client[os.environ.get("DB_NAME", "rca_reviewer")]
-    except Exception:
-        db = None
-elif mongo_url:
-    try:
-        client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=2000)
-        db = client[os.environ.get("DB_NAME", "rca_reviewer")]
-    except Exception:
-        db = None
-
-openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# OpenAI client: init at module load; safe if key missing
+try:
+    openai_api_key = os.environ.get("OPENAI_API_KEY") or ""
+    if openai_api_key:
+        openai_client = AsyncOpenAI(api_key=openai_api_key)
+    else:
+        logger.warning("OPENAI_API_KEY not set - API calls will fail")
+except Exception as e:
+    logger.warning("OpenAI client init failed: %s", e)
 
 ISSUE_TYPES = [
     "Causality gap", "Weak root cause", "Missing detection",
@@ -123,6 +145,9 @@ async def health():
 async def analyze_rca(req: AnalyzeRequest):
     if not req.document_text.strip():
         raise HTTPException(400, "Document text is empty")
+    
+    if not openai_client:
+        raise HTTPException(500, "OpenAI API key not configured")
 
     existing_ids = []
     if req.existing_issues:
@@ -155,7 +180,7 @@ Respond with this exact JSON structure:
     {{
       "issue_id": "unique-id-string",
       "issue_type": "one of the 7 issue types",
-      "anchor_text": "CRITICAL: copy-paste 5-15 words EXACTLY as they appear in the RCA text, character for character. Do not paraphrase or summarize. This must be a verbatim substring.",
+      "anchor_text": "CRITICAL: This MUST be a verbatim, character-for-character copy of 3-10 consecutive words from the RCA text above. Do NOT paraphrase, rephrase, abbreviate, or add words. Copy-paste directly. Shorter is better - pick a unique phrase that appears exactly once.",
       "comment_body": "[Issue Type]\\nExplanation...\\nRecommendation: ...",
       "resolved": false
     }}
@@ -183,10 +208,35 @@ Respond with this exact JSON structure:
         )
         result = json.loads(response.choices[0].message.content)
     except Exception as e:
-        raise HTTPException(500, f"LLM analysis failed: {str(e)}")
+        err_msg = str(e)
+        if "<!DOCTYPE html>" in err_msg or "<html" in err_msg.lower():
+            err_msg = "OpenAI request blocked or invalid (proxy/firewall or invalid API key). Check OPENAI_API_KEY and network."
+        raise HTTPException(500, f"LLM analysis failed: {err_msg}")
 
     scores = result.get("scores", {})
     total = sum(s.get("score", 0) for s in scores.values())
+
+    # Validate anchor_text: ensure each is a verbatim substring of the document
+    comments = result.get("comments", [])
+    doc_text = req.document_text
+    for comment in comments:
+        anchor = comment.get("anchor_text", "")
+        if anchor and anchor not in doc_text:
+            # Try to find a shorter matching substring
+            words = anchor.split()
+            found = False
+            # Try progressively shorter windows of consecutive words
+            for length in range(len(words), 2, -1):
+                for start_idx in range(len(words) - length + 1):
+                    candidate = " ".join(words[start_idx:start_idx + length])
+                    if candidate in doc_text:
+                        comment["anchor_text"] = candidate
+                        found = True
+                        break
+                if found:
+                    break
+            if not found:
+                logger.warning(f"Anchor text not found in document: {anchor[:80]}")
 
     timestamp = datetime.now(timezone.utc).isoformat()
 
@@ -194,7 +244,7 @@ Respond with this exact JSON structure:
         "analysis_id": str(uuid.uuid4()),
         "score": scores,
         "total_score": total,
-        "comments": result.get("comments", []),
+        "comments": comments,
         "executive_summary": result.get("executive_summary", {}),
         "timestamp": timestamp
     }
@@ -212,6 +262,9 @@ Respond with this exact JSON structure:
 async def chat_rca(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(400, "Message is empty")
+    
+    if not openai_client:
+        raise HTTPException(500, "OpenAI API key not configured")
 
     session_id = req.session_id or str(uuid.uuid4())
 
@@ -246,7 +299,10 @@ async def chat_rca(req: ChatRequest):
         )
         reply = response.choices[0].message.content
     except Exception as e:
-        raise HTTPException(500, f"Chat failed: {str(e)}")
+        err_msg = str(e)
+        if "<!DOCTYPE html>" in err_msg or "<html" in err_msg.lower():
+            err_msg = "OpenAI request blocked or invalid (proxy/firewall or invalid API key). Check OPENAI_API_KEY and network."
+        raise HTTPException(500, f"Chat failed: {err_msg}")
 
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -265,6 +321,9 @@ async def chat_rca(req: ChatRequest):
 async def process_reply(req: ReplyRequest):
     if not req.user_reply.strip():
         raise HTTPException(400, "Reply is empty")
+    
+    if not openai_client:
+        raise HTTPException(500, "OpenAI API key not configured")
 
     prompt = f"""You are reviewing an RCA document. A user replied to your inline comment.
 
