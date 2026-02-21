@@ -45,16 +45,16 @@ function runReview() {
 }
 
 /**
- * Called from Extensions menu: Extensions > RCA Reviewer > Apply Comments.
- * Highlights text in yellow + creates comments with quoted references.
+ * Called from Extensions menu OR sidebar button.
+ * Highlights anchor text in yellow + creates unanchored comments with quoted reference.
+ * Works from both menu trigger and google.script.run (sidebar).
  */
 function applyComments() {
-  var ui = DocumentApp.getUi();
   var props = PropertiesService.getDocumentProperties();
   var raw = props.getProperty('pending_analysis');
   if (!raw) {
-    ui.alert('No analysis found. Run RCA Review from the sidebar first.');
-    return;
+    try { DocumentApp.getUi().alert('No analysis found. Run RCA Review from the sidebar first.'); } catch(e) {}
+    return { error: 'No analysis found. Run RCA Review first, then apply comments.' };
   }
 
   var analysis = JSON.parse(raw);
@@ -63,6 +63,7 @@ function applyComments() {
   var body = doc.getBody();
   var comments = analysis.comments || [];
   var created = 0;
+  var errors = [];
 
   for (var i = 0; i < comments.length; i++) {
     var c = comments[i];
@@ -70,34 +71,43 @@ function applyComments() {
 
     var anchor = (c.anchor_text || '').trim();
 
-    // Step 1: Highlight the referenced text in yellow
+    // Step 1: Find the anchor text and highlight it yellow
     if (anchor) {
-      var searchText = anchor.length > 80 ? anchor.substring(0, 80) : anchor;
-      var searchResult = body.findText(searchText);
-      if (searchResult) {
-        var elem = searchResult.getElement();
-        var start = searchResult.getStartOffset();
-        var end = searchResult.getEndOffsetInclusive();
-        elem.editAsText().setBackgroundColor(start, end, '#FCE8B2');
+      try {
+        var searchText = anchor.length > 80 ? anchor.substring(0, 80) : anchor;
+        var searchResult = body.findText(searchText);
+        if (searchResult) {
+          var elem = searchResult.getElement();
+          var start = searchResult.getStartOffset();
+          var end = searchResult.getEndOffsetInclusive();
+          elem.editAsText().setBackgroundColor(start, end, '#FCE8B2');
+        }
+      } catch(highlightErr) {
+        // Non-critical: continue even if highlight fails
       }
     }
 
-    // Step 2: Create comment (unanchored, with quoted text in body)
+    // Step 2: Create an unanchored comment — no quotedFileContent so it never shows "Original content deleted"
     try {
-      var commentBody = c.comment_body;
-      if (anchor) {
-        commentBody = '> "' + anchor + '"\\n\\n' + c.comment_body;
-      }
+      var commentBody = anchor
+        ? '> "' + anchor + '"\\n\\n' + c.comment_body
+        : c.comment_body;
       Drive.Comments.create({ content: commentBody }, docId, { fields: 'id' });
       created++;
     } catch (e) {
-      ui.alert('Failed on comment ' + (i+1) + ': ' + e.toString());
+      errors.push('Comment ' + (i + 1) + ': ' + e.toString());
     }
 
     Utilities.sleep(300);
   }
 
-  ui.alert('Done! Created ' + created + ' comments.\\nReferenced text is highlighted in yellow.');
+  try {
+    DocumentApp.getUi().alert(
+      'Done! Created ' + created + ' of ' + comments.length + ' comments.\\nHighlighted text in yellow. Reload page to see all comments.'
+    );
+  } catch(e) {}
+
+  return { created: created, total: comments.length, errors: errors };
 }
 
 /**
