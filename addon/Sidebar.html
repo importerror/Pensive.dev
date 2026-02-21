@@ -482,6 +482,41 @@
         li.textContent = imp;
         list.appendChild(li);
       });
+
+      // Enable the Apply Comments button
+      var cs = document.getElementById('comment-status');
+      cs.textContent = 'Analysis complete. Click below to add inline comments.';
+      document.getElementById('apply-btn').disabled = false;
+    }
+    
+    function doApplyComments() {
+      var btn = document.getElementById('apply-btn');
+      var cs = document.getElementById('comment-status');
+      btn.disabled = true;
+      btn.textContent = 'Applying comments...';
+      cs.textContent = 'Creating comments... this may take a moment.';
+
+      google.script.run
+        .withSuccessHandler(function(r) {
+          if (r.error) {
+            cs.style.color = '#d93025';
+            cs.textContent = r.error;
+            btn.disabled = false;
+            btn.textContent = 'Apply Comments to Document';
+            return;
+          }
+          cs.style.background = '#e6f4ea';
+          cs.style.color = '#188038';
+          cs.textContent = 'Added ' + r.created + ' of ' + r.total + ' comments. Reload page to see them.';
+          btn.textContent = 'Comments Applied';
+        })
+        .withFailureHandler(function(err) {
+          cs.style.color = '#d93025';
+          cs.textContent = 'Failed: ' + err.message;
+          btn.disabled = false;
+          btn.textContent = 'Apply Comments to Document';
+        })
+        .applyComments();
     }
     
     function prefillChat(text) {
