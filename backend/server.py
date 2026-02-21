@@ -36,7 +36,8 @@ elif mongo_url:
     except Exception:
         db = None
 
-openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+_openai_api_key = os.environ.get("OPENAI_API_KEY")
+openai_client = AsyncOpenAI(api_key=_openai_api_key) if _openai_api_key else None
 
 ISSUE_TYPES = [
     "Causality gap", "Weak root cause", "Missing detection",
