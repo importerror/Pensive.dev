@@ -46,7 +46,7 @@ function runReview() {
 
 /**
  * Called from Extensions menu: Extensions > RCA Reviewer > Apply Comments.
- * Creates Google Docs comments with quoted text in the comment body.
+ * Highlights text in yellow + creates comments with quoted references.
  */
 function applyComments() {
   var ui = DocumentApp.getUi();
@@ -69,56 +69,35 @@ function applyComments() {
     if (!c.comment_body) continue;
 
     var anchor = (c.anchor_text || '').trim();
-    var commentText = c.comment_body;
 
-    // Try anchored comment first
-    var success = false;
+    // Step 1: Highlight the referenced text in yellow
     if (anchor) {
-      var searchResult = body.findText(anchor.substring(0, 80));
+      var searchText = anchor.length > 80 ? anchor.substring(0, 80) : anchor;
+      var searchResult = body.findText(searchText);
       if (searchResult) {
-        // Highlight the matched text
         var elem = searchResult.getElement();
         var start = searchResult.getStartOffset();
         var end = searchResult.getEndOffsetInclusive();
-        elem.editAsText().setBackgroundColor(start, end, '#fce8b2');
-      }
-
-      try {
-        Drive.Comments.create(
-          {
-            content: commentText,
-            quotedFileContent: { mimeType: 'text/plain', value: anchor.substring(0, 100) }
-          },
-          docId, { fields: 'id' }
-        );
-        success = true;
-      } catch (e) {
-        // Fall through to unanchored
+        elem.editAsText().setBackgroundColor(start, end, '#FCE8B2');
       }
     }
 
-    // Fallback: create unanchored comment with quoted text in body
-    if (!success) {
-      try {
-        var fullComment = commentText;
-        if (anchor) {
-          fullComment = '> "' + anchor + '"\\n\\n' + commentText;
-        }
-        Drive.Comments.create(
-          { content: fullComment },
-          docId, { fields: 'id' }
-        );
-        success = true;
-      } catch (e2) {
-        ui.alert('Failed on comment ' + (i+1) + ': ' + e2.toString());
+    // Step 2: Create comment (unanchored, with quoted text in body)
+    try {
+      var commentBody = c.comment_body;
+      if (anchor) {
+        commentBody = '> "' + anchor + '"\\n\\n' + c.comment_body;
       }
+      Drive.Comments.create({ content: commentBody }, docId, { fields: 'id' });
+      created++;
+    } catch (e) {
+      ui.alert('Failed on comment ' + (i+1) + ': ' + e.toString());
     }
 
-    if (success) created++;
-    Utilities.sleep(500);
+    Utilities.sleep(300);
   }
 
-  ui.alert('Done! Created ' + created + ' of ' + comments.length + ' comments.\\nHighlighted text is marked in yellow.');
+  ui.alert('Done! Created ' + created + ' comments.\\nReferenced text is highlighted in yellow.');
 }
 
 /**
