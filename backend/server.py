@@ -244,12 +244,16 @@ async def chat_rca(req: ChatRequest):
     messages.append({"role": "user", "content": req.message})
 
     try:
+        if openai_client is None:
+            raise HTTPException(500, "OpenAI API key not configured")
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
             temperature=0.4
         )
         reply = response.choices[0].message.content
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, f"Chat failed: {str(e)}")
 
