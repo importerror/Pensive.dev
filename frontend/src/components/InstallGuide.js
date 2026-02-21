@@ -273,8 +273,9 @@ function callBackendAPI(endpoint, payload) {
         </div>
         <h4 style="font-size:13px;font-weight:500;margin-bottom:8px;">Top Improvements</h4>
         <ul class="improvement-list" id="improvements"></ul>
-        <div id="comment-status" class="comment-status pending">To add inline comments: Extensions > RCA Reviewer > Apply Comments</div>
+        <div id="comment-status" class="comment-status pending">Analysis complete. Click below to add inline comments.</div>
         <div class="actions">
+          <button id="apply-btn" class="btn-primary" onclick="doApplyComments()" style="width:100%;justify-content:center;margin-bottom:4px;" disabled>Apply Comments to Document</button>
           <button class="btn-secondary" onclick="switchTab('chat')">Open Global RCA Chat</button>
           <button class="btn-text" onclick="startReview()" style="width:100%;text-align:center;">Re-run Review</button>
         </div>
