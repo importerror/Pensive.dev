@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 
 class RCAReviewerAPITester:
-    def __init__(self, base_url="https://34e1f9c7-ba43-4a89-9083-18ec47800fb6.preview.emergentagent.com"):
+    def __init__(self, base_url="https://feedback-engine-7.preview.emergentagent.com"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
