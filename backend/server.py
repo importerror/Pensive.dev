@@ -173,6 +173,8 @@ Respond with this exact JSON structure:
 }}"""
 
     try:
+        if openai_client is None:
+            raise HTTPException(500, "OpenAI API key not configured")
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -183,6 +185,8 @@ Respond with this exact JSON structure:
             response_format={"type": "json_object"}
         )
         result = json.loads(response.choices[0].message.content)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, f"LLM analysis failed: {str(e)}")
 
